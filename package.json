@@ -4,15 +4,11 @@
   "type": "module",
   "description": "Crawls camp websites to find director contact details",
   "scripts": {
-    "start": "node src/main.js",
-    "run:apify": "apify run -p input.json"
+    "start": "node src/main.js"
   },
   "dependencies": {
     "apify": "^3.2.5",
     "crawlee": "^3.8.3",
     "cheerio": "^1.0.0"
-  },
-  "devDependencies": {
-    "apify-cli": "^1.7.0"
   }
 }
