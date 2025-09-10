@@ -15,14 +15,16 @@
       "type": "integer",
       "editor": "number",
       "minimum": 0,
-      "default": 2
+      "default": 2,
+      "description": "How deep to follow in-domain links from seed pages (0 = seeds only)."
     },
     "maxRequestsPerDomain": {
       "title": "Max requests per domain",
       "type": "integer",
       "editor": "number",
       "minimum": 1,
-      "default": 30
+      "default": 30,
+      "description": "Upper limit on total fetched pages per domain to control cost."
     },
     "pageKeywords": {
       "title": "Priority page keywords",
@@ -33,19 +35,22 @@
         "contact", "staff", "team", "leadership", "about", "who we are",
         "our team", "directory", "employment", "jobs", "administration",
         "camp director", "directors", "board", "people"
-      ]
+      ],
+      "description": "Only follow same-domain links whose URL contains these keywords."
     },
     "respectRobotsTxt": {
       "title": "Respect robots.txt",
       "type": "boolean",
       "editor": "checkbox",
-      "default": true
+      "default": true,
+      "description": "If true, be conservative and avoid risky fetch behavior."
     },
     "useApifyProxy": {
       "title": "Use Apify Proxy",
       "type": "boolean",
       "editor": "checkbox",
-      "default": false
+      "default": false,
+      "description": "Enable Apify Proxy to reduce blocking (extra cost may apply)."
     }
   },
   "required": ["domains"]
