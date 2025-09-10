@@ -1,6 +1,6 @@
 import { Actor } from 'apify';
 import { CheerioCrawler, log } from 'crawlee';
-import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate, filterEmailsToDomain, pickEmailForCandidate } from './utils/extractors.js';
+import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate, filterEmailsToDomain, pickEmailForCandidate, extractFooterContacts } from './utils/extractors.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -99,12 +99,12 @@ const prioritizedKeywords = normalizeAndDedupe(
 
 const maxDepth = Number.isInteger(input.maxDepth) ? input.maxDepth : 2;
 const maxRequestsPerDomain = Number.isInteger(input.maxRequestsPerDomain) ? input.maxRequestsPerDomain : 30;
-const useApifyProxy = input.useApifyProxy !== false; // default true for fewer 403s
+const useApifyProxy = input.useApifyProxy !== false; // default true
 
 log.info(`Starting crawl for ${domains.length} domain(s).`);
 
 const domainStates = new Map();
-for (const d of domains) domainStates.set(d, { emails: new Set(), candidates: [], pagesCrawled: 0 });
+for (const d of domains) domainStates.set(d, { emails: new Set(), candidates: [], pagesCrawled: 0, footer: { emails: [], phones: [] } });
 
 const crawler = new CheerioCrawler({
 	maxRequestsPerCrawl: domains.length * Math.max(10, Math.min(80, maxRequestsPerDomain)),
@@ -131,6 +131,10 @@ const crawler = new CheerioCrawler({
 		const siteHost = new URL(url).hostname;
 		const candidates = extractDirectorCandidates(cheerio, url, prioritizedKeywords, siteHost);
 		state.candidates.push(...candidates);
+
+		// Footer contacts (email/phone) for later fallback enrichment
+		const footer = extractFooterContacts(cheerio, siteHost);
+		if (footer.emails.length || footer.phones.length) state.footer = footer;
 
 		if (depth < maxDepth) {
 			await enqueueLinks({
@@ -164,9 +168,13 @@ for (const domain of domains) {
 	const siteHost = new URL(toAbsoluteUrl(domain)).hostname;
 	const allEmails = filterEmailsToDomain(Array.from(state.emails), siteHost);
 	let best = pickBestCandidate(state) || null;
-	if (best && !best.email && allEmails.length) {
-		best = { ...best, email: pickEmailForCandidate(allEmails, best) };
+	if (best && !best.email && allEmails.length) best = { ...best, email: pickEmailForCandidate(allEmails, best) };
+	// Enrich with footer phone/email if missing
+	if (best) {
+		if (!best.phone && state.footer.phones?.length) best = { ...best, phone: state.footer.phones[0] };
+		if (!best.email && state.footer.emails?.length) best = { ...best, email: state.footer.emails[0] };
 	}
+
 	const item = {
 		inputDomain: domain,
 		bestContact: best,

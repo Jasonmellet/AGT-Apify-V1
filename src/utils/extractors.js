@@ -32,7 +32,7 @@ function emailIsOnDomain(email, siteHostname) {
 function normalizePhone(raw) {
 	if (!raw) return undefined;
 	const digits = String(raw).replace(/\D+/g, '');
-	if (digits.length === 11 && digits.startsWith('1')) return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+	if (digits.length === 11 && digits.startsWith('1')) return `+1 (${digits.slice(1,4)}) ${digits.slice(4,6+1)}-${digits.slice(7)}`;
 	if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
 	return undefined;
 }
@@ -76,6 +76,26 @@ function extractPhoneFromElement($, el) {
 		if (m && m.length) phone = normalizePhone(m[0]);
 	}
 	return phone;
+}
+
+export function extractFooterContacts($, siteHostname) {
+	const emails = new Set();
+	const phones = new Set();
+	const $footers = $('footer, .footer, #footer');
+	$footers.each((_, f) => {
+		$(f).find('a[href^="mailto:"]').each((__, a) => {
+			const e = (($(a).attr('href') || '').replace(/^mailto:/i, '').trim() || '').toLowerCase();
+			if (e && emailIsOnDomain(e, siteHostname)) emails.add(e);
+		});
+		const text = ($(f).text() || '').replace(/\s+/g, ' ');
+		(text.match(EMAIL_REGEX) || []).forEach((e) => {
+			const ee = (e || '').toLowerCase();
+			if (emailIsOnDomain(ee, siteHostname)) emails.add(ee);
+		});
+		const tel = extractPhoneFromElement($, f);
+		if (tel) phones.add(tel);
+	});
+	return { emails: Array.from(emails), phones: Array.from(phones) };
 }
 
 function isPlausibleName(first, last) {
