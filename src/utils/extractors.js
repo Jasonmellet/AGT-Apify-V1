@@ -2,6 +2,7 @@ import { load } from 'cheerio';
 
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const NAME_REGEX = /\b([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)\s+([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)\b/g;
+const PHONE_REGEX = /(?:\+?1[-.\s]?)?(?:\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}/g; // US-centric
 
 const DIRECTOR_TITLE_REGEX = /\b(camp\s*director|executive\s*director|program\s*director|director\s+of\s+[^\n<]{0,60}|site\s*director)\b/i;
 
@@ -27,6 +28,14 @@ function emailIsOnDomain(email, siteHostname) {
 	}
 }
 
+function normalizePhone(raw) {
+	if (!raw) return undefined;
+	const digits = String(raw).replace(/\D+/g, '');
+	if (digits.length === 11 && digits.startsWith('1')) return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+	if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+	return undefined;
+}
+
 export function filterEmailsToDomain(emails, siteHostname) {
 	return (emails || []).filter((e) => emailIsOnDomain(e, siteHostname));
 }
@@ -45,6 +54,27 @@ export function extractEmailsFromHtml(html, $) {
 	const textMatches = String(html || '').match(EMAIL_REGEX) || [];
 	textMatches.forEach((e) => emails.add(e.toLowerCase()));
 	return Array.from(emails);
+}
+
+function extractPhoneFromElement($, el) {
+	let phone;
+	$(el).find('a[href^="tel:"]').each((_, a) => {
+		if (phone) return;
+		const href = $(a).attr('href') || '';
+		const normalized = normalizePhone(href.replace(/^tel:/i, ''));
+		if (normalized) phone = normalized;
+	});
+	if (!phone) {
+		const text = ($(el).text() || '').replace(/\s+/g, ' ');
+		const m = text.match(PHONE_REGEX);
+		if (m && m.length) phone = normalizePhone(m[0]);
+	}
+	if (!phone) {
+		const html = $(el).html() || '';
+		const m = html.match(PHONE_REGEX);
+		if (m && m.length) phone = normalizePhone(m[0]);
+	}
+	return phone;
 }
 
 function isPlausibleName(first, last) {
@@ -115,6 +145,7 @@ function scoreCandidate(candidate, pageUrl, prioritized) {
 	let score = 0;
 	if (candidate.title && DIRECTOR_TITLE_REGEX.test(candidate.title)) score += 50;
 	if (candidate.email) score += 10;
+	if (candidate.phone) score += 6;
 	if (candidate.source === 'name-then-title' || candidate.source === 'title-then-name') score += 25;
 	const url = new URL(pageUrl);
 	const path = `${url.hostname}${url.pathname}`.toLowerCase();
@@ -219,6 +250,8 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 		}
 		if (email && !emailIsOnDomain(email, siteHostname)) email = undefined;
 
+		const phone = extractPhoneFromElement($, el) || extractPhoneFromElement($, $(el).parent());
+
 		// If still no names but we have an email, try derive firstName from email and search nearby
 		if (names.length === 0 && email) {
 			const fn = firstNameFromEmail(email);
@@ -233,6 +266,7 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			candidates.push({
 				...n,
 				email: email?.toLowerCase(),
+				phone,
 				title,
 				pageUrl,
 				context: text.slice(0, 240),
@@ -249,24 +283,26 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			...findNamesAroundTitle(fullText),
 		];
 		for (const n of globalNames) {
-			candidates.push({ ...n, email: undefined, title: 'Camp Director', pageUrl, context: fullText.slice(0, 240), confidence: 0 });
+			candidates.push({ ...n, email: undefined, phone: normalizePhone((fullText.match(PHONE_REGEX)||[])[0]), title: 'Camp Director', pageUrl, context: fullText.slice(0, 240), confidence: 0 });
 		}
 		// Pair names with mailto containers even without explicit titles
 		$('a[href^="mailto:"]').each((_, a) => {
 			const email = ($(a).attr('href') || '').replace(/^mailto:/i, '').trim().toLowerCase();
 			if (!emailIsOnDomain(email, siteHostname)) return;
-			const containerText = ($(a).closest('div,section,article,li,header,footer').text() || '').replace(/\s+/g, ' ').trim();
+			const $container = $(a).closest('div,section,article,li,header,footer');
+			const containerText = ($container.text() || '').replace(/\s+/g, ' ').trim();
 			const nameNear = findNamesNear(containerText)[0];
+			const phoneNear = extractPhoneFromElement($, $container);
 			if (nameNear) {
 				const title = DIRECTOR_TITLE_REGEX.test(containerText) ? (containerText.match(DIRECTOR_TITLE_REGEX)?.[0] || 'Camp Director') : 'Camp Director';
-				candidates.push({ ...nameNear, email, title, pageUrl, context: containerText.slice(0, 240), confidence: 0 });
+				candidates.push({ ...nameNear, email, phone: phoneNear, title, pageUrl, context: containerText.slice(0, 240), confidence: 0 });
 			}
 		});
 	}
 
 	const keyed = new Map();
 	for (const c of candidates) {
-		const key = `${c.fullName}|${c.title || ''}`.toLowerCase();
+		const key = `${c.fullName}|${c.title || ''}|${c.email || ''}`.toLowerCase();
 		if (!keyed.has(key)) keyed.set(key, c);
 	}
 	const unique = Array.from(keyed.values());
