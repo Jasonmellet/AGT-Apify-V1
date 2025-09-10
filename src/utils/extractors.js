@@ -145,9 +145,33 @@ function findNamesInContainer($, el) {
 			const txt = $(n).text().replace(/\s+/g, ' ').trim();
 			for (const cand of findNamesNear(txt)) results.push(cand);
 		});
+		// Also check image alt attributes on staff cards
+		$container.find('img[alt]').each((_, img) => {
+			const alt = ($(img).attr('alt') || '').replace(/\s+/g, ' ').trim();
+			for (const cand of findNamesNear(alt)) results.push(cand);
+		});
 		container = container.parent || null;
 	}
 	return results;
+}
+
+function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
+function firstNameFromEmail(email) {
+	if (!email) return undefined;
+	const local = String(email).split('@')[0];
+	const token = (local.split(/[._-]+/)[0] || '').replace(/\d+/g, '');
+	return ucfirst(token);
+}
+
+function findFullNameByFirst(text, firstName) {
+	if (!firstName) return null;
+	const windowRegex = new RegExp(`\\b${firstName}\\b[\	 \-\u2013\u2014,]*([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)`, 'i');
+	const m = text.match(windowRegex);
+	if (m) {
+		const last = m[1];
+		if (isPlausibleName(firstName, last)) return { fullName: `${ucfirst(firstName)} ${last}`, firstName: ucfirst(firstName), lastName: last };
+	}
+	return null;
 }
 
 export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteHostname) {
@@ -184,8 +208,6 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			names = findNamesInContainer($, el);
 		}
 
-		if (names.length === 0) continue;
-
 		let email;
 		$(el).find('a[href^="mailto:"]').each((_, a) => {
 			if (!email) email = ($(a).attr('href') || '').replace(/^mailto:/i, '').trim();
@@ -197,8 +219,16 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 		}
 		if (email && !emailIsOnDomain(email, siteHostname)) email = undefined;
 
+		// If still no names but we have an email, try derive firstName from email and search nearby
+		if (names.length === 0 && email) {
+			const fn = firstNameFromEmail(email);
+			const neighbor = findFullNameByFirst(text, fn) || findFullNameByFirst($(el).parent().text().replace(/\s+/g, ' ').trim(), fn);
+			if (neighbor) names = [neighbor];
+		}
+
 		const titleMatch = text.match(DIRECTOR_TITLE_REGEX);
 		const title = titleMatch ? titleMatch[0] : 'Camp Director';
+		if (names.length === 0) continue;
 		for (const n of names) {
 			candidates.push({
 				...n,
@@ -237,7 +267,6 @@ export function pickEmailForCandidate(domainEmails, candidate) {
 	const first = (candidate.firstName || '').toLowerCase();
 	const last = (candidate.lastName || '').toLowerCase();
 	const expected = first && last ? `${first[0]}${last}` : '';
-	// Prefer email containing last name, then first name, then first-initial+last
 	const byLast = emails.find((e) => last && e.includes(last));
 	if (byLast) return byLast;
 	const byFirst = emails.find((e) => first && e.includes(first));
