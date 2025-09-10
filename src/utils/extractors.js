@@ -8,8 +8,13 @@ const DIRECTOR_TITLE_REGEX = /\b(camp\s*director|executive\s*director|program\s*
 const ANY_DIRECTOR_REGEX = /\bdirector\b/i;
 
 const STOPWORD_TOKENS = new Set([
-	'at','camp','high','adventure','base','staff','employment','register','today','only','program','areas','photo','journal','leadership','who','we','are','about','contact','team','jobs','directory','more','info','request','welcome','located','looking','week','protected','policy','terms','service','privacy','apply','send','name','email','please','know','when','submitting','submit','format','different','day','city','state','council','road','basecamp','register','registering','account','sign','signin','signout','home'
+	'at','camp','high','adventure','base','staff','employment','register','today','only','program','areas','photo','journal','leadership','who','we','are','about','contact','team','jobs','directory','more','info','request','welcome','located','looking','week','protected','policy','terms','service','privacy','apply','send','name','email','please','know','when','submitting','submit','format','different','day','city','state','council','road','basecamp','register','registering','account','sign','signin','signout','home',
+	// additional blockers seen in false positives
+	'music','after','school','sponsor','appreciation','volleyball','executive','camper','our','staffing','club','center','farm','gym','ct','st','ave','blvd','rd','road','street','court','ct.'
 ]);
+
+const ADDRESS_SUFFIXES = ['ct','st','ave','blvd','rd','road','street','court'];
+const SHORT_LASTNAME_WHITELIST = new Set(['li','ng','su','yu','ma','lu']);
 
 function getRegistrableDomain(hostname) {
 	if (!hostname) return '';
@@ -57,54 +62,29 @@ export function extractEmailsFromHtml(html, $) {
 	return Array.from(emails);
 }
 
-function extractPhoneFromElement($, el) {
-	let phone;
-	$(el).find('a[href^="tel:"]').each((_, a) => {
-		if (phone) return;
-		const href = $(a).attr('href') || '';
-		const normalized = normalizePhone(href.replace(/^tel:/i, ''));
-		if (normalized) phone = normalized;
-	});
-	if (!phone) {
-		const text = ($(el).text() || '').replace(/\s+/g, ' ');
-		const m = text.match(PHONE_REGEX);
-		if (m && m.length) phone = normalizePhone(m[0]);
-	}
-	if (!phone) {
-		const html = $(el).html() || '';
-		const m = html.match(PHONE_REGEX);
-		if (m && m.length) phone = normalizePhone(m[0]);
-	}
-	return phone;
-}
-
-export function extractFooterContacts($, siteHostname) {
-	const emails = new Set();
-	const phones = new Set();
-	const $footers = $('footer, .footer, #footer');
-	$footers.each((_, f) => {
-		$(f).find('a[href^="mailto:"]').each((__, a) => {
-			const e = (($(a).attr('href') || '').replace(/^mailto:/i, '').trim() || '').toLowerCase();
-			if (e && emailIsOnDomain(e, siteHostname)) emails.add(e);
-		});
-		const text = ($(f).text() || '').replace(/\s+/g, ' ');
-		(text.match(EMAIL_REGEX) || []).forEach((e) => {
-			const ee = (e || '').toLowerCase();
-			if (emailIsOnDomain(ee, siteHostname)) emails.add(ee);
-		});
-		const tel = extractPhoneFromElement($, f);
-		if (tel) phones.add(tel);
-	});
-	return { emails: Array.from(emails), phones: Array.from(phones) };
-}
+function isTokenAlphabetic(s) { return /^[A-Za-z][A-Za-z'-]*$/.test(s); }
+function isAllCapsLong(s) { return /^[A-Z][A-Z'-]{3,}$/.test(s); }
+function hasVowel(s) { return /[AEIOUaeiou]/.test(s); }
 
 function isPlausibleName(first, last) {
 	if (!first || !last) return false;
 	const f = first.toLowerCase();
 	const l = last.toLowerCase();
+	// reject obvious non-person words
 	if (STOPWORD_TOKENS.has(f) || STOPWORD_TOKENS.has(l)) return false;
+	// alphabetic tokens only (allow hyphen/apostrophe)
+	if (!isTokenAlphabetic(first) || !isTokenAlphabetic(last)) return false;
+	// avoid ALLCAPS tokens like CYBCONTACT
+	if (isAllCapsLong(first) || isAllCapsLong(last)) return false;
+	// simple vowel presence heuristic
+	if (!hasVowel(first) || !hasVowel(last)) return false;
+	// length bounds, allow common short last names via whitelist
 	if (f.length < 2 || l.length < 2) return false;
-	if (/high adventure|photo journal|register|employment|only at|request more info/.test(`${f} ${l}`)) return false;
+	if (l.length === 2 && !SHORT_LASTNAME_WHITELIST.has(l)) return false;
+	// block address-type suffixes as last names
+	if (ADDRESS_SUFFIXES.includes(l.replace(/\.$/, ''))) return false;
+	// avoid generic pairs like "Our Staffing", "Music St"
+	if (STOPWORD_TOKENS.has(f) || STOPWORD_TOKENS.has(l)) return false;
 	return true;
 }
 
