@@ -1,7 +1,7 @@
 import { load } from 'cheerio';
 
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const NAME_REGEX = /\b([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)\s+([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)\b/g;
+const NAME_REGEX = /\b([A-Z][a-zA-Z]+(?:[-'][A-Z][a-zA-Z]+)?)\s+([A-Z][a-zA-Z]+(?:[-'][A-Z][a-zA-Z]+)?)\b/g;
 const PHONE_REGEX = /(?:\+?1[-.\s]?)?(?:\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}/g; // US-centric
 
 const DIRECTOR_TITLE_REGEX = /\b(camp\s*director|executive\s*director|program\s*director|director\s+of\s+[^\n<]{0,60}|site\s*director)\b/i;
