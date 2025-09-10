@@ -241,6 +241,29 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 		}
 	}
 
+	// Global fallbacks if nothing found in title blocks
+	if (candidates.length === 0) {
+		const fullText = $('body').text().replace(/\s+/g, ' ').trim();
+		const globalNames = [
+			...parseDirectTitleNamePatterns(fullText),
+			...findNamesAroundTitle(fullText),
+		];
+		for (const n of globalNames) {
+			candidates.push({ ...n, email: undefined, title: 'Camp Director', pageUrl, context: fullText.slice(0, 240), confidence: 0 });
+		}
+		// Pair names with mailto containers even without explicit titles
+		$('a[href^="mailto:"]').each((_, a) => {
+			const email = ($(a).attr('href') || '').replace(/^mailto:/i, '').trim().toLowerCase();
+			if (!emailIsOnDomain(email, siteHostname)) return;
+			const containerText = ($(a).closest('div,section,article,li,header,footer').text() || '').replace(/\s+/g, ' ').trim();
+			const nameNear = findNamesNear(containerText)[0];
+			if (nameNear) {
+				const title = DIRECTOR_TITLE_REGEX.test(containerText) ? (containerText.match(DIRECTOR_TITLE_REGEX)?.[0] || 'Camp Director') : 'Camp Director';
+				candidates.push({ ...nameNear, email, title, pageUrl, context: containerText.slice(0, 240), confidence: 0 });
+			}
+		});
+	}
+
 	const keyed = new Map();
 	for (const c of candidates) {
 		const key = `${c.fullName}|${c.title || ''}`.toLowerCase();
