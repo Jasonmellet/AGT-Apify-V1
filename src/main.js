@@ -1,6 +1,6 @@
 import { Actor } from 'apify';
 import { CheerioCrawler, log } from 'crawlee';
-import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate, filterEmailsToDomain } from './utils/extractors.js';
+import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate, filterEmailsToDomain, pickEmailForCandidate } from './utils/extractors.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -21,10 +21,10 @@ function buildSeedUrlsForDomain(domain, keywords) {
 		'/about', '/about-us', '/who-we-are', '/our-story', '/our-mission',
 		'/staff', '/our-staff', '/staff-directory', '/staff-list', '/meet-our-staff',
 		'/team', '/our-team', '/meet-the-team', '/leadership-team', '/executive-team',
-		'/leadership', 'administration', 'administrative-staff', 'faculty',
-		'/directory', 'people', 'board', 'board-of-directors',
-		'/employment', 'jobs', 'careers', 'join-our-team',
-		'/camp-director', 'program-director', 'site-director', 'directors'
+		'/leadership', '/administration', '/administrative-staff', '/faculty',
+		'/directory', '/people', '/board', '/board-of-directors',
+		'/employment', '/jobs', '/careers', '/join-our-team',
+		'/camp-director', '/program-director', '/site-director'
 	];
 	const seeds = new Set(paths.map((p) => `${base}${p}`));
 	(keywords || []).forEach((k) => seeds.add(`${base}/${k.replace(/\s+/g, '-')}`));
@@ -151,9 +151,12 @@ await crawler.run();
 
 for (const domain of domains) {
 	const state = domainStates.get(domain);
-	const best = pickBestCandidate(state) || null;
 	const siteHost = new URL(toAbsoluteUrl(domain)).hostname;
 	const allEmails = filterEmailsToDomain(Array.from(state.emails), siteHost);
+	let best = pickBestCandidate(state) || null;
+	if (best && !best.email && allEmails.length) {
+		best = { ...best, email: pickEmailForCandidate(allEmails, best) };
+	}
 	const item = {
 		inputDomain: domain,
 		bestContact: best,

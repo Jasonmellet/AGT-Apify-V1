@@ -135,6 +135,21 @@ function isInsideNavOrFooter($, el) {
 	return false;
 }
 
+function findNamesInContainer($, el) {
+	// Look in the parent container (up to 2 levels) for typical name tags
+	const results = [];
+	let container = el.parent || null;
+	for (let depth = 0; depth < 2 && container; depth += 1) {
+		const $container = $(container);
+		$container.find('h1,h2,h3,h4,h5,h6,strong,b,a,span').each((_, n) => {
+			const txt = $(n).text().replace(/\s+/g, ' ').trim();
+			for (const cand of findNamesNear(txt)) results.push(cand);
+		});
+		container = container.parent || null;
+	}
+	return results;
+}
+
 export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteHostname) {
 	const candidates = [];
 	const prioritized = (prioritizedKeywords || []).map((k) => k.toLowerCase());
@@ -164,6 +179,11 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			];
 		}
 
+		// Try container-level scan (cards on staff pages)
+		if (names.length === 0) {
+			names = findNamesInContainer($, el);
+		}
+
 		if (names.length === 0) continue;
 
 		let email;
@@ -191,19 +211,6 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 		}
 	}
 
-	// Fallback: scan full body text if nothing found
-	if (candidates.length === 0) {
-		const fullText = $('body').text().replace(/\s+/g, ' ').trim();
-		const names = [
-			...parseDirectTitleNamePatterns(fullText),
-			...findNamesAroundTitle(fullText),
-		];
-		const title = 'Camp Director';
-		for (const n of names) {
-			candidates.push({ ...n, email: undefined, title, pageUrl, context: fullText.slice(0, 240), confidence: 0 });
-		}
-	}
-
 	const keyed = new Map();
 	for (const c of candidates) {
 		const key = `${c.fullName}|${c.title || ''}`.toLowerCase();
@@ -222,4 +229,20 @@ export function pickBestCandidate(domainState) {
 
 export function htmlToCheerio(html) {
 	return load(html);
+}
+
+export function pickEmailForCandidate(domainEmails, candidate) {
+	if (!candidate || !Array.isArray(domainEmails) || domainEmails.length === 0) return undefined;
+	const emails = domainEmails.map((e) => String(e).toLowerCase());
+	const first = (candidate.firstName || '').toLowerCase();
+	const last = (candidate.lastName || '').toLowerCase();
+	const expected = first && last ? `${first[0]}${last}` : '';
+	// Prefer email containing last name, then first name, then first-initial+last
+	const byLast = emails.find((e) => last && e.includes(last));
+	if (byLast) return byLast;
+	const byFirst = emails.find((e) => first && e.includes(first));
+	if (byFirst) return byFirst;
+	const byInit = emails.find((e) => expected && e.split('@')[0].includes(expected));
+	if (byInit) return byInit;
+	return emails[0];
 }
