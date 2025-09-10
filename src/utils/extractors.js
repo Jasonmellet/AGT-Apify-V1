@@ -16,7 +16,7 @@ const STOPWORD_TOKENS = new Set([
 const ADDRESS_SUFFIXES = ['ct','st','ave','blvd','rd','road','street','court'];
 const SHORT_LASTNAME_WHITELIST = new Set(['li','ng','su','yu','ma','lu']);
 
-function getRegistrableDomain(hostname) {
+export function getRegistrableDomain(hostname) {
 	if (!hostname) return '';
 	const parts = String(hostname).toLowerCase().split('.').filter(Boolean);
 	if (parts.length <= 2) return parts.join('.');
@@ -204,6 +204,59 @@ function findFullNameByFirst(text, firstName) {
 		if (isPlausibleName(firstName, last)) return { fullName: `${ucfirst(firstName)} ${last}`, firstName: ucfirst(firstName), lastName: last };
 	}
 	return null;
+}
+
+function extractPhoneFromElement($, el) {
+	try {
+		let phone;
+		$(el).find('a[href^="tel:"]').each((_, a) => {
+			if (phone) return;
+			const href = $(a).attr('href') || '';
+			const raw = href.replace(/^tel:/i, '');
+			const norm = normalizePhone(raw);
+			if (norm) phone = norm;
+		});
+		if (!phone) {
+			const text = ($(el).text() || '').replace(/\s+/g, ' ').trim();
+			const m = text.match(PHONE_REGEX);
+			if (m && m.length) phone = normalizePhone(m[0]);
+		}
+		return phone;
+	} catch {
+		return undefined;
+	}
+}
+
+export function extractFooterContacts($, siteHostname) {
+	const emails = new Set();
+	const phones = new Set();
+	const $footers = $('footer, .footer, #footer, [class*="footer"], [id*="footer"], [class*="site-info"], [class*="site-footer"], [class*="contact"]');
+	$footers.each((_, f) => {
+		// emails
+		$(f).find('a[href^="mailto:"]').each((__, a) => {
+			const href = $(a).attr('href') || '';
+			const m = href.replace(/^mailto:/i, '').match(EMAIL_REGEX) || [];
+			m.forEach((e) => {
+				if (emailIsOnDomain(e, siteHostname)) emails.add(e.toLowerCase());
+			});
+		});
+		const text = ($(f).text() || '').replace(/\s+/g, ' ');
+		(text.match(EMAIL_REGEX) || []).forEach((e) => {
+			if (emailIsOnDomain(e, siteHostname)) emails.add(String(e).toLowerCase());
+		});
+		// phones
+		$(f).find('a[href^="tel:"]').each((__, a) => {
+			const href = $(a).attr('href') || '';
+			const norm = normalizePhone(href.replace(/^tel:/i, ''));
+			if (norm) phones.add(norm);
+		});
+		const m = text.match(PHONE_REGEX) || [];
+		m.forEach((p) => {
+			const norm = normalizePhone(p);
+			if (norm) phones.add(norm);
+		});
+	});
+	return { emails: Array.from(emails), phones: Array.from(phones) };
 }
 
 export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteHostname) {
