@@ -6,24 +6,28 @@
     "domains": {
       "title": "Domains or URLs",
       "type": "array",
+      "editor": "stringList",
       "description": "List of camp domains or full URLs (e.g. example.com or https://example.com)",
       "items": { "type": "string" }
     },
     "maxDepth": {
       "title": "Max crawl depth",
       "type": "integer",
+      "editor": "number",
       "minimum": 0,
       "default": 2
     },
     "maxRequestsPerDomain": {
       "title": "Max requests per domain",
       "type": "integer",
+      "editor": "number",
       "minimum": 1,
       "default": 30
     },
     "pageKeywords": {
       "title": "Priority page keywords",
       "type": "array",
+      "editor": "stringList",
       "items": { "type": "string" },
       "default": [
         "contact", "staff", "team", "leadership", "about", "who we are",
@@ -34,11 +38,13 @@
     "respectRobotsTxt": {
       "title": "Respect robots.txt",
       "type": "boolean",
+      "editor": "checkbox",
       "default": true
     },
     "useApifyProxy": {
       "title": "Use Apify Proxy",
       "type": "boolean",
+      "editor": "checkbox",
       "default": false
     }
   },
