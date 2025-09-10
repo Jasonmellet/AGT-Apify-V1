@@ -1,6 +1,6 @@
 import { Actor } from 'apify';
 import { CheerioCrawler, log } from 'crawlee';
-import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate } from './utils/extractors.js';
+import { extractEmailsFromHtml, extractDirectorCandidates, normalizeAndDedupe, pickBestCandidate, filterEmailsToDomain } from './utils/extractors.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -16,7 +16,15 @@ function toAbsoluteUrl(input) {
 function buildSeedUrlsForDomain(domain, keywords) {
 	const base = toAbsoluteUrl(domain).replace(/\/$/, '');
 	const paths = [
-		'', '/contact', '/contact-us', '/about', '/about-us', '/staff', '/team', '/leadership', '/administration', '/directory', '/employment', '/jobs', '/who-we-are'
+		'',
+		'/contact', '/contact-us', '/contactus', '/contact-us/',
+		'/about', '/about-us', '/who-we-are', '/our-story', '/our-mission',
+		'/staff', '/our-staff', '/staff-directory', '/staff-list', '/meet-our-staff',
+		'/team', '/our-team', '/meet-the-team', '/leadership-team', '/executive-team',
+		'/leadership', 'administration', 'administrative-staff', 'faculty',
+		'/directory', 'people', 'board', 'board-of-directors',
+		'/employment', 'jobs', 'careers', 'join-our-team',
+		'/camp-director', 'program-director', 'site-director', 'directors'
 	];
 	const seeds = new Set(paths.map((p) => `${base}${p}`));
 	(keywords || []).forEach((k) => seeds.add(`${base}/${k.replace(/\s+/g, '-')}`));
@@ -65,10 +73,18 @@ if (domains.length === 0) {
 	process.exit(1);
 }
 
+const defaultKeywords = [
+	'contact', 'contact-us', 'contactus', 'about', 'about-us', 'who we are', 'our story', 'our mission',
+	'staff', 'our staff', 'staff directory', 'staff list', 'meet our staff',
+	'team', 'our team', 'meet the team', 'leadership team', 'executive team',
+	'leadership', 'administration', 'administrative staff', 'faculty',
+	'directory', 'people', 'board', 'board of directors',
+	'employment', 'jobs', 'careers', 'join our team',
+	'camp director', 'program director', 'site director', 'directors'
+];
+
 const prioritizedKeywords = normalizeAndDedupe(
-	input.pageKeywords || [
-		'contact', 'staff', 'team', 'leadership', 'about', 'who we are', 'our team', 'directory', 'employment', 'jobs', 'administration', 'camp director', 'directors', 'board', 'people',
-	],
+	input.pageKeywords && input.pageKeywords.length ? input.pageKeywords : defaultKeywords,
 );
 
 const maxDepth = Number.isInteger(input.maxDepth) ? input.maxDepth : 2;
@@ -136,7 +152,8 @@ await crawler.run();
 for (const domain of domains) {
 	const state = domainStates.get(domain);
 	const best = pickBestCandidate(state) || null;
-	const allEmails = Array.from(state.emails);
+	const siteHost = new URL(toAbsoluteUrl(domain)).hostname;
+	const allEmails = filterEmailsToDomain(Array.from(state.emails), siteHost);
 	const item = {
 		inputDomain: domain,
 		bestContact: best,
