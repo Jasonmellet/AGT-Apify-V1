@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "camp-director-contact-crawler",
+  "title": "Camp Director Contact Crawler",
+  "description": "Finds director names and emails from camp websites.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "input": "INPUT_SCHEMA.json"
+}

@@ -1,0 +1,46 @@
+{
+  "title": "Camp Director Contact Crawler - Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "domains": {
+      "title": "Domains or URLs",
+      "type": "array",
+      "description": "List of camp domains or full URLs (e.g. example.com or https://example.com)",
+      "items": { "type": "string" }
+    },
+    "maxDepth": {
+      "title": "Max crawl depth",
+      "type": "integer",
+      "minimum": 0,
+      "default": 2
+    },
+    "maxRequestsPerDomain": {
+      "title": "Max requests per domain",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30
+    },
+    "pageKeywords": {
+      "title": "Priority page keywords",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [
+        "contact", "staff", "team", "leadership", "about", "who we are",
+        "our team", "directory", "employment", "jobs", "administration",
+        "camp director", "directors", "board", "people"
+      ]
+    },
+    "respectRobotsTxt": {
+      "title": "Respect robots.txt",
+      "type": "boolean",
+      "default": true
+    },
+    "useApifyProxy": {
+      "title": "Use Apify Proxy",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": ["domains"]
+}
