@@ -5,6 +5,7 @@ const NAME_REGEX = /\b([A-Z][a-z]+(?:[-'][A-Z][a-z]+)?)\s+([A-Z][a-z]+(?:[-'][A-
 const PHONE_REGEX = /(?:\+?1[-.\s]?)?(?:\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}/g; // US-centric
 
 const DIRECTOR_TITLE_REGEX = /\b(camp\s*director|executive\s*director|program\s*director|director\s+of\s+[^\n<]{0,60}|site\s*director)\b/i;
+const ANY_DIRECTOR_REGEX = /\bdirector\b/i;
 
 const STOPWORD_TOKENS = new Set([
 	'at','camp','high','adventure','base','staff','employment','register','today','only','program','areas','photo','journal','leadership','who','we','are','about','contact','team','jobs','directory','more','info','request','welcome','located','looking','week','protected','policy','terms','service','privacy','apply','send','name','email','please','know','when','submitting','submit','format','different','day','city','state','council','road','basecamp','register','registering','account','sign','signin','signout','home'
@@ -143,14 +144,14 @@ function parseDirectTitleNamePatterns(text) {
 
 function scoreCandidate(candidate, pageUrl, prioritized) {
 	let score = 0;
-	if (candidate.title && DIRECTOR_TITLE_REGEX.test(candidate.title)) score += 50;
+	if (candidate.title && (DIRECTOR_TITLE_REGEX.test(candidate.title) || /\bdirector\b/i.test(candidate.title))) score += 50;
 	if (candidate.email) score += 10;
 	if (candidate.phone) score += 6;
 	if (candidate.source === 'name-then-title' || candidate.source === 'title-then-name') score += 25;
 	const url = new URL(pageUrl);
 	const path = `${url.hostname}${url.pathname}`.toLowerCase();
 	if (prioritized.some((k) => path.includes(k))) score += 10;
-	if (/camp\s*director/i.test(candidate.context || '')) score += 8;
+	if (/camp\s*director|\bdirector\b/i.test(candidate.context || '')) score += 8;
 	return score;
 }
 
@@ -208,13 +209,15 @@ function findFullNameByFirst(text, firstName) {
 export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteHostname) {
 	const candidates = [];
 	const prioritized = (prioritizedKeywords || []).map((k) => k.toLowerCase());
+	const path = (() => { try { return new URL(pageUrl).pathname.toLowerCase(); } catch { return ''; } })();
+	const likelyStaffPage = /(staff|team|about|leadership|directory|people)/i.test(path);
 
 	const blocks = [];
 	$('h1,h2,h3,h4,h5,h6,p,li,div,section,article,strong').each((_, el) => {
 		if (isInsideNavOrFooter($, el)) return;
 		const text = $(el).text().replace(/\s+/g, ' ').trim();
 		if (!text) return;
-		if (DIRECTOR_TITLE_REGEX.test(text)) blocks.push({ el, text });
+		if (DIRECTOR_TITLE_REGEX.test(text) || (likelyStaffPage && ANY_DIRECTOR_REGEX.test(text))) blocks.push({ el, text });
 	});
 
 	for (const { el, text } of blocks) {
@@ -259,8 +262,7 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			if (neighbor) names = [neighbor];
 		}
 
-		const titleMatch = text.match(DIRECTOR_TITLE_REGEX);
-		const title = titleMatch ? titleMatch[0] : 'Camp Director';
+		const title = (DIRECTOR_TITLE_REGEX.test(text) && (text.match(DIRECTOR_TITLE_REGEX)?.[0])) || (ANY_DIRECTOR_REGEX.test(text) ? 'Director' : 'Camp Director');
 		if (names.length === 0) continue;
 		for (const n of names) {
 			candidates.push({
@@ -294,7 +296,7 @@ export function extractDirectorCandidates($, pageUrl, prioritizedKeywords, siteH
 			const nameNear = findNamesNear(containerText)[0];
 			const phoneNear = extractPhoneFromElement($, $container);
 			if (nameNear) {
-				const title = DIRECTOR_TITLE_REGEX.test(containerText) ? (containerText.match(DIRECTOR_TITLE_REGEX)?.[0] || 'Camp Director') : 'Camp Director';
+				const title = DIRECTOR_TITLE_REGEX.test(containerText) ? (containerText.match(DIRECTOR_TITLE_REGEX)?.[0] || 'Camp Director') : (ANY_DIRECTOR_REGEX.test(containerText) ? 'Director' : 'Camp Director');
 				candidates.push({ ...nameNear, email, phone: phoneNear, title, pageUrl, context: containerText.slice(0, 240), confidence: 0 });
 			}
 		});
