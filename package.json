@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Crawls camp websites to find director contact details",
   "scripts": {
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "dir:collect": "node directory-collector/index.js"
   },
   "dependencies": {
     "apify": "^3.2.5",
