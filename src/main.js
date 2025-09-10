@@ -13,9 +13,18 @@ function toAbsoluteUrl(input) {
 	}
 }
 
+function dupeWithSlash(paths) {
+	const out = new Set();
+	for (const p of paths) {
+		out.add(p);
+		if (!p.endsWith('/')) out.add(`${p}/`);
+	}
+	return Array.from(out);
+}
+
 function buildSeedUrlsForDomain(domain, keywords) {
 	const base = toAbsoluteUrl(domain).replace(/\/$/, '');
-	const paths = [
+	const rawPaths = [
 		'',
 		'/contact', '/contact-us', '/contactus', '/contact-us/',
 		'/about', '/about-us', '/who-we-are', '/our-story', '/our-mission',
@@ -26,6 +35,7 @@ function buildSeedUrlsForDomain(domain, keywords) {
 		'/employment', '/jobs', '/careers', '/join-our-team',
 		'/camp-director', '/program-director', '/site-director'
 	];
+	const paths = dupeWithSlash(rawPaths);
 	const seeds = new Set(paths.map((p) => `${base}${p}`));
 	(keywords || []).forEach((k) => seeds.add(`${base}/${k.replace(/\s+/g, '-')}`));
 	return Array.from(seeds);
@@ -89,7 +99,7 @@ const prioritizedKeywords = normalizeAndDedupe(
 
 const maxDepth = Number.isInteger(input.maxDepth) ? input.maxDepth : 2;
 const maxRequestsPerDomain = Number.isInteger(input.maxRequestsPerDomain) ? input.maxRequestsPerDomain : 30;
-const useApifyProxy = Boolean(input.useApifyProxy);
+const useApifyProxy = input.useApifyProxy !== false; // default true for fewer 403s
 
 log.info(`Starting crawl for ${domains.length} domain(s).`);
 
@@ -98,8 +108,8 @@ for (const d of domains) domainStates.set(d, { emails: new Set(), candidates: []
 
 const crawler = new CheerioCrawler({
 	maxRequestsPerCrawl: domains.length * Math.max(10, Math.min(80, maxRequestsPerDomain)),
-	minConcurrency: 2,
-	maxConcurrency: 8,
+	minConcurrency: 1,
+	maxConcurrency: 4,
 	requestHandlerTimeoutSecs: 45,
 	maxRequestRetries: 2,
 	proxyConfiguration: useApifyProxy ? await Actor.createProxyConfiguration() : undefined,
